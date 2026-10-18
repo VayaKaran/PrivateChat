@@ -1,0 +1,65 @@
+name: Deploy Static Client to GitHub Pages
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'client/**'
+      - 'shared/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+    inputs:
+      backend_api_url:
+        description: 'Self-hosted Backend Server URL (e.g. https://chat.myhome.net)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Shared Types & Cryptography
+        run: npm run build --workspace=shared
+
+      - name: Build Vite Frontend for Static Pages
+        env:
+          VITE_BASE_PATH: './'
+          VITE_API_URL: ${{ inputs.backend_api_url }}
+        run: npm run build --workspace=client
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Static Web Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './client/dist'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
